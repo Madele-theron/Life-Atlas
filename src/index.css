@@ -1,4 +1,19 @@
+@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: 'Outfit', sans-serif;
+  --color-wealth: #10b981;
+  --color-wealth-bg: rgba(16, 185, 129, 0.1);
+  --color-health: #f59e0b;
+  --color-health-bg: rgba(245, 158, 11, 0.1);
+  --color-love: #f43f5e;
+  --color-love-bg: rgba(244, 63, 94, 0.1);
+  --color-self: #3b82f6;
+  --color-self-bg: rgba(59, 130, 246, 0.1);
+  --color-ascent: #8b5cf6;
+  --color-ascent-bg: rgba(139, 92, 246, 0.1);
+}
 
 :root {
   --bg-dark: #0f172a;
