@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
+import Auth from './pages/Auth';
+import ProtectedRoute from './components/ProtectedRoute';
 import GlobalDashboard from './pages/GlobalDashboard';
 import WealthDashboard from './pages/Wealth/WealthDashboard';
 import FinancialTracker from './pages/Wealth/FinancialTracker';
@@ -18,7 +20,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
+        <Route path="/auth" element={<Auth />} />
+
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route index element={<GlobalDashboard />} />
 
           {/* Wealth Module */}

@@ -1,93 +1,162 @@
-import { CheckCircle2, Circle, GraduationCap } from 'lucide-react';
+import { CheckCircle2, Circle, GraduationCap, ArrowLeft, BookOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-const INITIAL_COURSE = [
+const INITIAL_COURSES = [
     {
-        week: 1,
-        title: "Optimize Your Credit Cards",
-        tasks: [
-            { id: 'w1t1', text: "Check your credit score", completed: false },
-            { id: 'w1t2', text: "Set up automatic credit card payments", completed: false },
-            { id: 'w1t3', text: "Call credit card company to waive fees / lower APR", completed: false },
+        id: 'how-to-get-rich',
+        title: 'How to Get Rich',
+        description: 'A step-by-step 6-week syllabus to automate your wealth and build your rich life.',
+        weeks: [
+            {
+                week: 1,
+                title: "Optimize Your Credit Cards",
+                notes: "",
+                tasks: [
+                    { id: 'w1t1', text: "Check your credit score", completed: false },
+                    { id: 'w1t2', text: "Set up automatic credit card payments", completed: false },
+                    { id: 'w1t3', text: "Call credit card company to waive fees / lower APR", completed: false },
+                ]
+            },
+            {
+                week: 2,
+                title: "Beat the Banks",
+                notes: "",
+                tasks: [
+                    { id: 'w2t1', text: "Open a completely fee-free high-yield checking account", completed: false },
+                    { id: 'w2t2', text: "Open a high-yield savings account", completed: false },
+                    { id: 'w2t3', text: "Fund your new savings account with at least an initial deposit", completed: false },
+                ]
+            },
+            {
+                week: 3,
+                title: "Get Ready to Invest",
+                notes: "",
+                tasks: [
+                    { id: 'w3t1', text: "Open a retirement/investment account (e.g., TFSA or RA in SA)", completed: false },
+                    { id: 'w3t2', text: "Fund the investment account", completed: false },
+                    { id: 'w3t3', text: "Understand the difference between investing and speculating", completed: false },
+                ]
+            },
+            {
+                week: 4,
+                title: "Conscious Spending",
+                notes: "",
+                tasks: [
+                    { id: 'w4t1', text: "Track your spending for one month to find your baseline", completed: false },
+                    { id: 'w4t2', text: "Categorize spending into Fixed Costs, Investments, Savings, and Guilt-Free Spending", completed: false },
+                    { id: 'w4t3', text: "Ruthlessly cut costs on things you don't care about", completed: false },
+                    { id: 'w4t4', text: "Spend extravagantly on the things you love", completed: false },
+                ]
+            },
+            {
+                week: 5,
+                title: "Automate Your Infrastructure",
+                notes: "",
+                tasks: [
+                    { id: 'w5t1', text: "Link all your accounts together (paycheck -> checking -> savings/investing)", completed: false },
+                    { id: 'w5t2', text: "Set up an automatic money flow system for payday", completed: false },
+                ]
+            },
+            {
+                week: 6,
+                title: "The Myth of Financial Expertise",
+                notes: "",
+                tasks: [
+                    { id: 'w6t1', text: "Choose an automated, low-cost index fund or target-date fund", completed: false },
+                    { id: 'w6t2', text: "Commit to ignoring the daily market news", completed: false },
+                    { id: 'w6t3', text: "Set up automatic monthly contributions to your index fund", completed: false },
+                ]
+            },
         ]
-    },
-    {
-        week: 2,
-        title: "Beat the Banks",
-        tasks: [
-            { id: 'w2t1', text: "Open a completely fee-free high-yield checking account", completed: false },
-            { id: 'w2t2', text: "Open a high-yield savings account", completed: false },
-            { id: 'w2t3', text: "Fund your new savings account with at least an initial deposit", completed: false },
-        ]
-    },
-    {
-        week: 3,
-        title: "Get Ready to Invest",
-        tasks: [
-            { id: 'w3t1', text: "Open a retirement/investment account (e.g., TFSA or RA in SA)", completed: false },
-            { id: 'w3t2', text: "Fund the investment account", completed: false },
-            { id: 'w3t3', text: "Understand the difference between investing and speculating", completed: false },
-        ]
-    },
-    {
-        week: 4,
-        title: "Conscious Spending",
-        tasks: [
-            { id: 'w4t1', text: "Track your spending for one month to find your baseline", completed: false },
-            { id: 'w4t2', text: "Categorize spending into Fixed Costs, Investments, Savings, and Guilt-Free Spending", completed: false },
-            { id: 'w4t3', text: "Ruthlessly cut costs on things you don't care about", completed: false },
-            { id: 'w4t4', text: "Spend extravagantly on the things you love", completed: false },
-        ]
-    },
-    {
-        week: 5,
-        title: "Automate Your Infrastructure",
-        tasks: [
-            { id: 'w5t1', text: "Link all your accounts together (paycheck -> checking -> savings/investing)", completed: false },
-            { id: 'w5t2', text: "Set up an automatic money flow system for payday", completed: false },
-        ]
-    },
-    {
-        week: 6,
-        title: "The Myth of Financial Expertise",
-        tasks: [
-            { id: 'w6t1', text: "Choose an automated, low-cost index fund or target-date fund", completed: false },
-            { id: 'w6t2', text: "Commit to ignoring the daily market news", completed: false },
-            { id: 'w6t3', text: "Set up automatic monthly contributions to your index fund", completed: false },
-        ]
-    },
+    }
 ];
 
 export default function Course() {
-    const [courseData, setCourseData] = useState(() => {
-        return JSON.parse(localStorage.getItem('lcc_wealth_course')) || INITIAL_COURSE;
+    const [courses, setCourses] = useState(() => {
+        return JSON.parse(localStorage.getItem('lcc_wealth_courses_v2')) || INITIAL_COURSES;
     });
+    const [selectedCourseId, setSelectedCourseId] = useState(null);
 
     useEffect(() => {
-        localStorage.setItem('lcc_wealth_course', JSON.stringify(courseData));
-    }, [courseData]);
+        localStorage.setItem('lcc_wealth_courses_v2', JSON.stringify(courses));
+    }, [courses]);
+
+    const activeCourse = courses.find(c => c.id === selectedCourseId);
 
     const toggleTask = (weekIndex, taskId) => {
-        const newData = [...courseData];
-        const task = newData[weekIndex].tasks.find(t => t.id === taskId);
+        if (!activeCourse) return;
+        const newCourses = [...courses];
+        const courseIndex = newCourses.findIndex(c => c.id === selectedCourseId);
+        const task = newCourses[courseIndex].weeks[weekIndex].tasks.find(t => t.id === taskId);
         if (task) {
             task.completed = !task.completed;
-            setCourseData(newData);
+            setCourses(newCourses);
         }
     };
 
-    // Calculate overall progress
-    const totalTasks = courseData.reduce((acc, week) => acc + week.tasks.length, 0);
-    const completedTasks = courseData.reduce((acc, week) => acc + week.tasks.filter(t => t.completed).length, 0);
+    const updateNotes = (weekIndex, text) => {
+        if (!activeCourse) return;
+        const newCourses = [...courses];
+        const courseIndex = newCourses.findIndex(c => c.id === selectedCourseId);
+        newCourses[courseIndex].weeks[weekIndex].notes = text;
+        setCourses(newCourses);
+    };
+
+    // Course List View
+    if (!selectedCourseId) {
+        return (
+            <div className="fade-in">
+                <header className="mb-8">
+                    <h1>Courses</h1>
+                    <p>Interactive action plans and syllabuses to level up your wealth.</p>
+                </header>
+                <div className="dashboard-grid">
+                    {courses.map(course => {
+                        const totalTasks = course.weeks.reduce((acc, week) => acc + week.tasks.length, 0);
+                        const completedTasks = course.weeks.reduce((acc, week) => acc + week.tasks.filter(t => t.completed).length, 0);
+                        const progressPercent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+                        return (
+                            <div key={course.id} className="card" style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid var(--border-glass)' }} onClick={() => setSelectedCourseId(course.id)} onMouseOver={e => e.currentTarget.style.borderColor = 'var(--color-wealth)'} onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border-glass)'}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                                    <div style={{ padding: '0.5rem', background: 'var(--color-wealth-bg)', borderRadius: '8px', color: 'var(--color-wealth)' }}>
+                                        <GraduationCap size={24} />
+                                    </div>
+                                    <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{course.title}</h2>
+                                </div>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', minHeight: '40px' }}>{course.description}</p>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                                    <span>Progress</span>
+                                    <span style={{ color: 'var(--color-wealth)', fontWeight: '600' }}>{progressPercent}%</span>
+                                </div>
+                                <div style={{ width: '100%', height: '6px', background: 'var(--bg-dark)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--color-wealth)' }}></div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        )
+    }
+
+    // Individual Course View
+    const totalTasks = activeCourse.weeks.reduce((acc, week) => acc + week.tasks.length, 0);
+    const completedTasks = activeCourse.weeks.reduce((acc, week) => acc + week.tasks.filter(t => t.completed).length, 0);
     const progressPercent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
     return (
         <div className="fade-in">
-            <header className="mb-8" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                    <h1>Action Plan: How to Get Rich</h1>
-                    <p>A step-by-step 6-week syllabus to automate your wealth and build your rich life.</p>
-                </div>
+            <header className="mb-8">
+                <button
+                    onClick={() => setSelectedCourseId(null)}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: 0, marginBottom: '1rem' }}
+                >
+                    <ArrowLeft size={16} /> Back to Courses
+                </button>
+                <h1>{activeCourse.title}</h1>
+                <p>{activeCourse.description}</p>
             </header>
 
             <div className="card mb-8">
@@ -105,7 +174,7 @@ export default function Course() {
             </div>
 
             <div className="dashboard-grid">
-                {courseData.map((week, wIndex) => {
+                {activeCourse.weeks.map((week, wIndex) => {
                     const isWeekComplete = week.tasks.every(t => t.completed);
 
                     return (
@@ -115,7 +184,7 @@ export default function Course() {
                                 <h2 style={{ margin: '0.25rem 0 0 0', fontSize: '1.2rem', textDecoration: isWeekComplete ? 'line-through' : 'none' }}>{week.title}</h2>
                             </div>
 
-                            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
                                 {week.tasks.map(task => (
                                     <li
                                         key={task.id}
@@ -147,6 +216,30 @@ export default function Course() {
                                     </li>
                                 ))}
                             </ul>
+
+                            {/* Notes Section for the Week */}
+                            <div style={{ borderTop: '1px dashed var(--border-glass)', paddingTop: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: 'var(--text-muted)' }}>
+                                    <BookOpen size={16} />
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Week {week.week} Notes & Progress</span>
+                                </div>
+                                <textarea
+                                    placeholder="Write down your thoughts, wins, and roadblocks for this week..."
+                                    rows={3}
+                                    value={week.notes || ""}
+                                    onChange={(e) => updateNotes(wIndex, e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid var(--border-glass)',
+                                        background: 'var(--bg-dark)',
+                                        color: 'white',
+                                        resize: 'vertical',
+                                        fontSize: '0.9rem'
+                                    }}
+                                ></textarea>
+                            </div>
                         </div>
                     );
                 })}

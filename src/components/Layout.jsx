@@ -1,9 +1,16 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutGrid, HeartPulse, Wallet, Heart, Sparkles, PieChart, Target, BookOpen, ReceiptCent, Dumbbell, ShieldCheck, Sun, GraduationCap, Mountain, FileSpreadsheet } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutGrid, HeartPulse, Wallet, Heart, Sparkles, PieChart, Target, BookOpen, ReceiptCent, Dumbbell, ShieldCheck, Sun, GraduationCap, Mountain, FileSpreadsheet, LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPath = location.pathname;
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
 
   // Determine current active macro area based on URL path
   const isWealth = currentPath.startsWith('/wealth');
@@ -60,6 +67,15 @@ export default function Layout() {
         >
           <Mountain size={24} />
         </NavLink>
+
+        <div style={{ flexGrow: 1 }}></div>
+        <button
+          onClick={handleSignOut}
+          className="global-sidebar-link text-zinc-500 hover:text-red-400 mt-auto mb-4"
+          title="Sign Out"
+        >
+          <LogOut size={24} />
+        </button>
       </nav>
 
       {/* Area Specific Sidebar */}
@@ -84,8 +100,8 @@ export default function Layout() {
           <NavLink to="/wealth/knowledge" className="area-nav-link">
             <BookOpen size={18} /> Notes & Learnings
           </NavLink>
-          <NavLink to="/wealth/course" className="area-nav-link" style={{ marginTop: '0.5rem', background: 'var(--color-wealth-bg)', color: 'var(--color-wealth)' }}>
-            <GraduationCap size={18} /> Action Plan
+          <NavLink to="/wealth/course" className="area-nav-link">
+            <GraduationCap size={18} /> Courses
           </NavLink>
         </aside>
       )}
