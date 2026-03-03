@@ -1,13 +1,27 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, Plus, Download, Split as SplitIcon, Trash2, FileSpreadsheet, X, AlertCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
 export default function FinancialTracker() {
-    const [transactions, setTransactions] = useState([]);
+    const [transactions, setTransactions] = useState(() => {
+        try {
+            const saved = localStorage.getItem('lcc_transactions');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            console.warn('lcc_transactions was corrupted — resetting.');
+            return [];
+        }
+    });
     const [newEntry, setNewEntry] = useState({ date: '', account: '', description: '', category: '', amount: '' });
     const [splitModal, setSplitModal] = useState({ isOpen: false, transactionId: null, originalAmount: 0, splits: [] });
     const fileInputRef = useRef(null);
+
+    // Persist transactions across page reloads
+    useEffect(() => {
+        localStorage.setItem('lcc_transactions', JSON.stringify(transactions));
+    }, [transactions]);
+
 
     const categories = ['Groceries', 'Gifts', 'Petrol', 'To Be Paid Back', 'Treats', 'Income', 'Other'];
     const accounts = ['Credit Card', 'Debit Card', 'Checking', 'Savings', 'Cash', 'Other'];
@@ -53,7 +67,7 @@ export default function FinancialTracker() {
             const amountVal = getVal(['amount', 'value', 'price', 'debit', 'credit', 'amount(zar)', 'amount (zar)']);
 
             return {
-                id: Date.now() + Math.random().toString(36).substring(2, 9),
+                id: crypto.randomUUID(),
                 date: getVal(['date', 'transaction date', 'posting date']) || new Date().toISOString().split('T')[0],
                 account: getVal(['account', 'card', 'bank', 'source']) || 'Other',
                 description: getVal(['description', 'memo', 'narration', 'payee', 'title']) || 'Unknown Transaction',
@@ -97,8 +111,8 @@ export default function FinancialTracker() {
             transactionId: t.id,
             originalAmount: t.amount,
             splits: [
-                { id: Date.now().toString() + '1', amount: t.amount, category: t.category, description: t.description },
-                { id: Date.now().toString() + '2', amount: 0, category: 'Other', description: '' }
+                { id: crypto.randomUUID(), amount: t.amount, category: t.category, description: t.description },
+                { id: crypto.randomUUID(), amount: 0, category: 'Other', description: '' }
             ]
         });
     };
@@ -110,7 +124,7 @@ export default function FinancialTracker() {
     const addSplitRow = () => {
         setSplitModal(prev => ({
             ...prev,
-            splits: [...prev.splits, { id: Date.now().toString(), amount: 0, category: 'Other', description: '' }]
+            splits: [...prev.splits, { id: crypto.randomUUID(), amount: 0, category: 'Other', description: '' }]
         }));
     };
 
@@ -140,11 +154,18 @@ export default function FinancialTracker() {
 
         const tOriginal = transactions.find(t => t.id === splitModal.transactionId);
 
+        // Guard against the original transaction being deleted before saving
+        if (!tOriginal) {
+            alert('The original transaction could not be found. Please close and try again.');
+            closeSplitModal();
+            return;
+        }
+
         const newTransactions = splitModal.splits
             .filter(s => parseFloat(s.amount || 0) !== 0)
             .map(s => ({
                 ...tOriginal,
-                id: Date.now() + Math.random().toString(36).substring(2, 9),
+                id: crypto.randomUUID(),
                 amount: parseFloat(s.amount),
                 category: s.category,
                 description: s.description || tOriginal.description + ' (Split)'

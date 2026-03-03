@@ -6,10 +6,8 @@ export default function ProtectedRoute({ children }) {
 
     useEffect(() => {
         const session = localStorage.getItem('atlas_session');
-        const masterPassword = import.meta.env.VITE_APP_PASSWORD;
-
-        // Very simple session check: does the token match the password?
-        if (session === masterPassword) {
+        // Compare against a fixed opaque token — never the raw password
+        if (session === 'ATLAS_AUTHENTICATED') {
             setIsAuthenticated(true);
         } else {
             setIsAuthenticated(false);

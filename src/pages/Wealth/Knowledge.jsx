@@ -2,12 +2,20 @@ import { BookOpen, Lightbulb, Search, Trophy } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function Knowledge() {
+    const defaultNotes = [
+        { id: 1, type: 'tip', title: 'Tax Benefits of RA in SA', content: 'Contributions to a Retirement Annuity are tax-deductible up to 27.5% of remuneration or taxable income (capped at R350,000 p.a.).' },
+        { id: 2, type: 'research', title: 'Index Funds', content: 'Compare Satrix MSCI World vs Sygnia Itrix S&P 500 TERs.' },
+        { id: 3, type: 'win', title: 'Hit Emergency Fund Target', content: 'Finally reached 6 months of expenses in a high-yield savings account! 🥳' }
+    ];
+
     const [notes, setNotes] = useState(() => {
-        return JSON.parse(localStorage.getItem('lcc_notes')) || [
-            { id: 1, type: 'tip', title: 'Tax Benefits of RA in SA', content: 'Contributions to a Retirement Annuity are tax-deductible up to 27.5% of remuneration or taxable income (capped at R350,000 p.a.).' },
-            { id: 2, type: 'research', title: 'Index Funds', content: 'Compare Satrix MSCI World vs Sygnia Itrix S&P 500 TERs.' },
-            { id: 3, type: 'win', title: 'Hit Emergency Fund Target', content: 'Finally reached 6 months of expenses in a high-yield savings account! 🥳' }
-        ];
+        try {
+            const saved = localStorage.getItem('lcc_notes');
+            return saved ? JSON.parse(saved) : defaultNotes;
+        } catch {
+            console.warn('lcc_notes was corrupted — resetting to defaults.');
+            return defaultNotes;
+        }
     });
 
     const [newNote, setNewNote] = useState({ title: '', content: '', type: 'tip' });

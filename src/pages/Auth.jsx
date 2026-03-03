@@ -17,7 +17,7 @@ export default function Auth() {
 
         setTimeout(() => {
             if (password === masterPassword) {
-                localStorage.setItem('atlas_session', password);
+                localStorage.setItem('atlas_session', 'ATLAS_AUTHENTICATED');
                 navigate('/');
             } else {
                 setError('Incorrect Access Key');

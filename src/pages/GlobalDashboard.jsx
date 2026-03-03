@@ -31,9 +31,9 @@ export default function GlobalDashboard() {
                     </div>
                     <h2>Health</h2>
                     <p className="mb-4">Main goal: To be healthy at old age, with no weird or random sicknesses. Built through fitness tracking, longevity protocols, and mental wellbeing.</p>
-                    <button className="btn" disabled style={{ width: '100%', justifyContent: 'center', opacity: 0.5, cursor: 'not-allowed' }}>
-                        Coming Soon
-                    </button>
+                    <Link to="/health" className="btn" style={{ background: 'var(--color-health-bg)', color: 'var(--color-health)', width: '100%', justifyContent: 'center' }}>
+                        Enter Health <ArrowRight size={18} />
+                    </Link>
                 </div>
 
                 {/* Love Card */}

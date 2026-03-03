@@ -7,12 +7,18 @@ export default function Assets() {
         () => Number(localStorage.getItem('lcc_netWorth')) || 1100000
     );
 
+    const handleNetWorthUpdate = (value) => {
+        const parsed = parseFloat(value) || 0;
+        setCurrentAssets(parsed);
+        localStorage.setItem('lcc_netWorth', parsed);
+    };
+
     const progress = Math.min(100, Math.max(0, (currentAssets / fireTarget) * 100));
 
     return (
         <div className="fade-in">
             <header className="mb-8">
-                <h1>Assets & Investments</h1>
+                <h1>Assets &amp; Investments</h1>
                 <p>Your wealth-building engine and accounts.</p>
             </header>
 
@@ -30,8 +36,16 @@ export default function Assets() {
                     <div style={{ width: `${progress}%`, height: '100%', background: 'var(--color-wealth)', transition: 'width 1s ease-out' }}></div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                    <span>Current: R {(currentAssets).toLocaleString()}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span>Current Net Worth: R</span>
+                        <input
+                            type="number"
+                            value={currentAssets}
+                            onChange={(e) => handleNetWorthUpdate(e.target.value)}
+                            style={{ width: '120px', background: 'var(--bg-dark)', border: '1px solid var(--border-glass)', color: 'var(--color-wealth)', borderRadius: '6px', padding: '0.2rem 0.5rem', fontWeight: '600' }}
+                        />
+                    </div>
                     <span>Target: R {(fireTarget).toLocaleString()}</span>
                 </div>
             </div>
