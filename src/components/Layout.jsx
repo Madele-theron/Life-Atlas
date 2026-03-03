@@ -7,8 +7,8 @@ export default function Layout() {
   const navigate = useNavigate();
   const currentPath = location.pathname;
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = () => {
+    localStorage.removeItem('atlas_session');
     navigate('/auth');
   };
 
