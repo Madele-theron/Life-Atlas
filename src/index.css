@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
 
 @theme {
   --font-sans: 'Outfit', sans-serif;
@@ -13,34 +13,25 @@
   --color-self-bg: rgba(59, 130, 246, 0.1);
   --color-ascent: #8b5cf6;
   --color-ascent-bg: rgba(139, 92, 246, 0.1);
+
+  --animate-spin-slow: spin 8s linear infinite;
 }
 
-:root {
-  --bg-dark: #0f172a;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-  --border-glass: rgba(255, 255, 255, 0.08);
+@layer base {
+  :root {
+    --bg-dark: #0f172a;
+    --bg-card: rgba(255, 255, 255, 0.03);
+    --bg-card-hover: rgba(255, 255, 255, 0.06);
+    --border-glass: rgba(255, 255, 255, 0.08);
 
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
 
-  /* Area Colors */
-  --color-wealth: #10b981;
-  --color-wealth-bg: rgba(16, 185, 129, 0.1);
-  --color-health: #f59e0b;
-  --color-health-bg: rgba(245, 158, 11, 0.1);
-  --color-love: #f43f5e;
-  --color-love-bg: rgba(244, 63, 94, 0.1);
-  --color-self: #3b82f6;
-  --color-self-bg: rgba(59, 130, 246, 0.1);
-  --color-ascent: #8b5cf6;
-  --color-ascent-bg: rgba(139, 92, 246, 0.1);
-
-  --font-family: 'Outfit', sans-serif;
-
-  --transition-fast: 0.2s ease;
-  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: 0.2s ease;
+    --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
+
 
 * {
   box-sizing: border-box;
