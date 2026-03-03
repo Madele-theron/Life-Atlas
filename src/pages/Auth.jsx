@@ -27,7 +27,7 @@ export default function Auth() {
     };
 
     return (
-        <div className="min-h-screen flex text-white font-sans relative overflow-hidden bg-black">
+        <div className="min-h-screen w-full flex text-white font-sans relative overflow-hidden bg-black">
             {/* Decorative Background Elements */}
             <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-900/20 blur-[120px] pointer-events-none"></div>
             <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-emerald-900/20 blur-[120px] pointer-events-none"></div>
