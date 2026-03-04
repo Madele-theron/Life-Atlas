@@ -4,10 +4,11 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-        '[supabase.js] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in your .env file.'
+    console.warn(
+        '[supabase.js] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are not set. Supabase features will be disabled.'
     )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
+export const supabase = (supabaseUrl && supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null
