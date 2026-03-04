@@ -38,7 +38,17 @@ export default function FinancialTracker() {
     useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
 
-    const categories = ['Groceries', 'Gifts', 'Petrol', 'To Be Paid Back', 'Treats', 'Income', 'Other'];
+    const categories = [
+        'Petrol', 'Eating Out', 'Gifts', 'Blessings / Donations', 'Medical / Dr',
+        'Car Admin / Maintenance', 'Clothing', 'Toiletries', 'Electronics', 'Rent',
+        'Home Garden', 'Alcohol', 'Groceries', 'Fees', 'Vacation', 'Sports & Fitness',
+        'Hobbies', 'Education', 'Treats', 'Entertainment / Going Out', 'Phone / Data',
+        'Skincare', 'Ouers', 'Personal Development', 'Birthday', 'Shoes', 'Accessories',
+        'Parking', 'Government', 'Health', 'Emergency Fund', 'Subscriptions',
+        'Investments', 'Insurance', 'Supplements', 'Tithe', 'Medical Aid / Hospital Plan',
+        'Electricity', 'Water', 'Laser Hair Removal', 'Rent Extra (cleaning, house)',
+        'Roadtrip', 'Cash Withdrawal', 'Other', 'Marieke Wedding'
+    ];
     const accounts = ['Credit Card', 'Debit Card', 'Checking', 'Savings', 'Cash', 'Other'];
 
     const parsePdfTransactions = async (file) => {
@@ -76,62 +86,88 @@ export default function FinancialTracker() {
     };
 
     const extractTransactionsFromText = (text) => {
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
         const transactions = [];
 
-        // Regex: matches lines that start with or contain a date (DD/MM/YYYY, DD Mon YYYY, YYYY-MM-DD)
-        // followed by a description and end with an amount
-        const datePatterns = [
-            // DD/MM/YYYY or DD-MM-YYYY at start of line
-            /^(\d{2}[/-]\d{2}[/-]\d{4})\s+(.+?)\s+(-?[\d\s]+[.,]\d{2})\s*$/,
-            // YYYY-MM-DD at start of line
-            /^(\d{4}-\d{2}-\d{2})\s+(.+?)\s+(-?[\d\s]+[.,]\d{2})\s*$/,
-            // DD Mon YYYY (e.g. 04 Mar 2026)
-            /^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4})\s+(.+?)\s+(-?[\d\s]+[.,]\d{2})\s*$/i,
-            // Date anywhere in line with amount at end
-            /^(\d{1,2}[/-]\d{2}[/-]\d{4})\s+(.*?)\s+(-?R?[\d\s]+[.,]\d{2})\s*$/,
-        ];
+        // Support various date formats: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+        const dateRegex = /^(\d{2}[/-]\d{2}[/-]\d{4}|\d{4}-\d{2}-\d{2})/i;
 
         for (const line of lines) {
-            // Skip header-like lines
-            if (/^(date|transaction|description|amount|balance|debit|credit|details|reference)/i.test(line)) continue;
-            // Skip very short lines or lines with no digits
-            if (!/\d/.test(line)) continue;
+            const dateMatch = line.match(dateRegex);
+            if (!dateMatch) continue;
 
-            for (const pattern of datePatterns) {
-                const match = line.match(pattern);
-                if (match) {
-                    const rawDate = match[1].trim();
-                    const description = match[2].trim().replace(/\s+/g, ' ');
-                    const rawAmount = match[3].replace(/[R\s]/g, '').replace(',', '.');
-                    const amount = parseFloat(rawAmount);
+            const rawDate = dateMatch[1];
+            // Normalize date to YYYY-MM-DD for Supabase
+            let date = rawDate;
+            const dmyMatch = rawDate.match(/(\d{2})[/-](\d{2})[/-](\d{4})/);
+            if (dmyMatch) date = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
 
-                    if (!description || isNaN(amount)) break;
+            // Remove date from line to parse the rest
+            const restOfLine = line.substring(rawDate.length).trim();
 
-                    // Normalise date to YYYY-MM-DD
-                    let date = rawDate;
-                    const dmyMatch = rawDate.match(/(\d{2})[/-](\d{2})[/-](\d{4})/);
-                    if (dmyMatch) date = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
-                    const ymdMatch = rawDate.match(/(\d{4})-(\d{2})-(\d{2})/);
-                    if (ymdMatch) date = rawDate;
-                    const wordsMatch = rawDate.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/i);
-                    if (wordsMatch) {
-                        const months = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
-                        const m = months[wordsMatch[2].toLowerCase()] || '01';
-                        date = `${wordsMatch[3]}-${m}-${wordsMatch[1].padStart(2, '0')}`;
-                    }
+            // Extract all numeric values at the end of the line (In, Out, Fee, Balance)
+            // This captures numbers like "1 234.56", "-50.00", "0.05", etc.
+            const amountMatches = restOfLine.match(/-?[\d\s]+[.,]\d{2}/g);
 
-                    transactions.push({
-                        id: crypto.randomUUID(),
-                        date,
-                        account: 'Other',
-                        description,
-                        category: 'Other',
-                        amount: Math.abs(amount),
-                    });
-                    break;
+            if (!amountMatches || amountMatches.length < 2) continue; // Need at least [Amount, Balance]
+
+            // Description + Category is everything between date and the first amount
+            const firstAmount = amountMatches[0];
+            const rawDescLine = restOfLine.substring(0, restOfLine.indexOf(firstAmount)).trim();
+
+            // Try to split Description and Category if there's a large gap (2+ spaces)
+            let description = rawDescLine;
+            let extractedCategory = 'Other';
+
+            if (rawDescLine.includes('  ')) {
+                const parts = rawDescLine.split(/\s{2,}/);
+                if (parts.length >= 2) {
+                    extractedCategory = parts.pop().trim();
+                    description = parts.join('  ').trim();
                 }
             }
+
+            // The last amount is ALWAYS the Balance in SA bank statements - we discard it
+            const balance = amountMatches.pop();
+
+            // Smart Category Mapping
+            const mapCategory = (cat, desc) => {
+                const lowerCat = cat.toLowerCase();
+                const lowerDesc = desc.toLowerCase();
+
+                if (lowerCat.includes('restaurant') || lowerCat.includes('takeaway') || lowerDesc.includes('checkers sixty60')) return 'Eating Out';
+                if (lowerCat.includes('fuel') || lowerDesc.includes('engen') || lowerDesc.includes('shell') || lowerDesc.includes('sasol')) return 'Petrol';
+                if (lowerCat.includes('grocer') || lowerDesc.includes('woolworths') || lowerDesc.includes('checkers') || lowerDesc.includes('pnp') || lowerDesc.includes('spar')) return 'Groceries';
+                if (lowerCat.includes('pharmacy') || lowerCat.includes('medical')) return 'Medical / Dr';
+                if (lowerCat.includes('parking')) return 'Parking';
+                if (lowerCat.includes('education')) return 'Education';
+                if (lowerCat.includes('interest') || lowerCat.includes('fee')) return 'Fees';
+                if (lowerCat.includes('transfer')) return 'Other';
+
+                // Try to find a direct match in the user's list
+                const match = categories.find(c => c.toLowerCase() === lowerCat);
+                return match || 'Other';
+            };
+
+            // Remaining amounts are either [MoneyIn/Out] or [MoneyIn/Out, Fee]
+            amountMatches.forEach((rawAmt, index) => {
+                const amount = parseFloat(rawAmt.replace(/\s/g, '').replace(',', '.'));
+                if (Math.abs(amount) < 0.01) return;
+
+                const isFee = index === 1 || description.toLowerCase().includes('fee');
+                const finalCategory = isFee ? 'Fees' : mapCategory(extractedCategory, description);
+
+                transactions.push({
+                    date,
+                    account: 'Other',
+                    description: isFee && !description.toLowerCase().includes('fee')
+                        ? `${description} (Bank Fee)`
+                        : description,
+                    category: finalCategory,
+                    amount: Math.abs(amount),
+                    type: amount < 0 ? 'expense' : 'income'
+                });
+            });
         }
 
         return transactions;
@@ -149,13 +185,20 @@ export default function FinancialTracker() {
             try {
                 const parsed = await parsePdfTransactions(file);
                 if (parsed.length === 0) {
-                    setParseError('No transactions found in this PDF. The format may not be supported — try uploading a CSV or Excel export from your bank instead.');
+                    setParseError('No transactions found. Ensure this is a digital bank statement (not a scan).');
                 } else {
-                    setTransactions(prev => [...prev, ...parsed]);
+                    // Filter out internal IDs and insert into Supabase
+                    const { data: inserted, error } = await supabase
+                        .from('transactions')
+                        .insert(parsed)
+                        .select();
+
+                    if (error) throw error;
+                    setTransactions(prev => [...(inserted || []), ...prev]);
                 }
             } catch (err) {
                 console.error('PDF parse error:', err);
-                setParseError('Failed to read the PDF. Make sure it is a text-based PDF (not a scanned image) and try again.');
+                setParseError('Failed to read the PDF format. Try CSV or Excel if available.');
             } finally {
                 setIsParsing(false);
             }
@@ -180,7 +223,6 @@ export default function FinancialTracker() {
             reader.readAsBinaryString(file);
         }
 
-        // Reset file input
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
