@@ -1,5 +1,8 @@
 import { CheckCircle2, Circle, GraduationCap, ArrowLeft, BookOpen } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+
+const STORAGE_KEY = 'lcc_wealth_courses_v2';
 
 const INITIAL_COURSES = [
     {
@@ -72,34 +75,60 @@ const INITIAL_COURSES = [
 ];
 
 export default function Course() {
-    const [courses, setCourses] = useState(() => {
-        return JSON.parse(localStorage.getItem('lcc_wealth_courses_v2')) || INITIAL_COURSES;
-    });
+    const [courses, setCourses] = useState(INITIAL_COURSES);
+    const [loading, setLoading] = useState(true);
     const [selectedCourseId, setSelectedCourseId] = useState(null);
 
-    useEffect(() => {
-        localStorage.setItem('lcc_wealth_courses_v2', JSON.stringify(courses));
-    }, [courses]);
+    const fetchCourses = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('user_data')
+            .select('value')
+            .eq('key', STORAGE_KEY)
+            .single();
 
-    const activeCourse = courses.find(c => c.id === selectedCourseId);
+        if (data && data.value) {
+            setCourses(data.value);
+        } else {
+            // Check local storage for legacy data (migration)
+            const savedLocal = localStorage.getItem(STORAGE_KEY);
+            if (savedLocal) {
+                const parsed = JSON.parse(savedLocal);
+                setCourses(parsed);
+                // Promptly push to DB
+                await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { fetchCourses(); }, [fetchCourses]);
+
+    // This handles all updates by persisting to Supabase
+    const persistUpdates = async (newCourses) => {
+        setCourses(newCourses);
+        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: newCourses });
+        if (error) console.error('Error saving course progress:', error.message);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newCourses));
+    };
 
     const toggleTask = (weekIndex, taskId) => {
-        if (!activeCourse) return;
+        if (!selectedCourseId) return;
         const newCourses = [...courses];
         const courseIndex = newCourses.findIndex(c => c.id === selectedCourseId);
         const task = newCourses[courseIndex].weeks[weekIndex].tasks.find(t => t.id === taskId);
         if (task) {
             task.completed = !task.completed;
-            setCourses(newCourses);
+            persistUpdates(newCourses);
         }
     };
 
     const updateNotes = (weekIndex, text) => {
-        if (!activeCourse) return;
+        if (!selectedCourseId) return;
         const newCourses = [...courses];
         const courseIndex = newCourses.findIndex(c => c.id === selectedCourseId);
         newCourses[courseIndex].weeks[weekIndex].notes = text;
-        setCourses(newCourses);
+        persistUpdates(newCourses);
     };
 
     // Course List View

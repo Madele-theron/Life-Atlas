@@ -1,34 +1,56 @@
-import { BookOpen, Lightbulb, Search, Trophy } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { BookOpen, Lightbulb, Search, Trophy, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function Knowledge() {
-    const defaultNotes = [
-        { id: 1, type: 'tip', title: 'Tax Benefits of RA in SA', content: 'Contributions to a Retirement Annuity are tax-deductible up to 27.5% of remuneration or taxable income (capped at R350,000 p.a.).' },
-        { id: 2, type: 'research', title: 'Index Funds', content: 'Compare Satrix MSCI World vs Sygnia Itrix S&P 500 TERs.' },
-        { id: 3, type: 'win', title: 'Hit Emergency Fund Target', content: 'Finally reached 6 months of expenses in a high-yield savings account! 🥳' }
-    ];
-
-    const [notes, setNotes] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lcc_notes');
-            return saved ? JSON.parse(saved) : defaultNotes;
-        } catch {
-            console.warn('lcc_notes was corrupted — resetting to defaults.');
-            return defaultNotes;
-        }
-    });
-
+    const [notes, setNotes] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [newNote, setNewNote] = useState({ title: '', content: '', type: 'tip' });
 
-    useEffect(() => {
-        localStorage.setItem('lcc_notes', JSON.stringify(notes));
-    }, [notes]);
+    const fetchNotes = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('knowledge_notes')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error('Error loading notes:', error.message);
+        } else {
+            setNotes(data || []);
+        }
+        setLoading(false);
+    }, []);
 
-    const addNote = (e) => {
+    useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+    const addNote = async (e) => {
         e.preventDefault();
         if (!newNote.title || !newNote.content) return;
-        setNotes([{ id: Date.now(), ...newNote }, ...notes]);
+
+        const { data, error } = await supabase
+            .from('knowledge_notes')
+            .insert({ title: newNote.title, content: newNote.content, type: newNote.type })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error saving note:', error.message);
+            alert('Could not save note. Please try again.');
+            return;
+        }
+        setNotes(prev => [data, ...prev]);
         setNewNote({ title: '', content: '', type: 'tip' });
+    };
+
+    const deleteNote = async (id) => {
+        if (!confirm('Delete this note?')) return;
+        const { error } = await supabase.from('knowledge_notes').delete().eq('id', id);
+        if (error) {
+            console.error('Error deleting note:', error.message);
+            alert('Could not delete note. Please try again.');
+            return;
+        }
+        setNotes(prev => prev.filter(n => n.id !== id));
     };
 
     const getIcon = (type) => {
@@ -36,12 +58,12 @@ export default function Knowledge() {
         if (type === 'research') return <Search size={20} className="text-self" />;
         if (type === 'win') return <Trophy size={20} className="text-health" />;
         return <BookOpen size={20} />;
-    }
+    };
 
     return (
         <div className="fade-in">
             <header className="mb-8">
-                <h1>AI Tips, Notes & Learnings</h1>
+                <h1>AI Tips, Notes &amp; Learnings</h1>
                 <p>Your personal financial diary and knowledge base.</p>
             </header>
 
@@ -78,19 +100,29 @@ export default function Knowledge() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {loading && <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>Loading notes…</p>}
+                {!loading && notes.length === 0 && <p>No notes yet. Add your first learning above!</p>}
                 {notes.map(note => (
                     <div key={note.id} className="card" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', padding: '1.5rem' }}>
-                        <div style={{ padding: '0.75rem', background: 'var(--bg-dark)', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
+                        <div style={{ padding: '0.75rem', background: 'var(--bg-dark)', borderRadius: '12px', border: '1px solid var(--border-glass)', flexShrink: 0 }}>
                             {getIcon(note.type)}
                         </div>
-                        <div>
+                        <div style={{ flex: 1 }}>
                             <h3 style={{ margin: 0, fontSize: '1.1rem', marginBottom: '0.25rem' }}>{note.title}</h3>
                             <p style={{ margin: 0, color: 'var(--text-muted)' }}>{note.content}</p>
                         </div>
+                        <button
+                            onClick={() => deleteNote(note.id)}
+                            style={{ background: 'var(--color-love-bg)', border: 'none', color: 'var(--color-love)', borderRadius: '8px', padding: '0.4rem', cursor: 'pointer', flexShrink: 0 }}
+                            title="Delete note"
+                        >
+                            <Trash2 size={16} />
+                        </button>
                     </div>
                 ))}
-                {notes.length === 0 && <p>No notes yet. Add your first learning above!</p>}
             </div>
         </div>
     );
 }
+
+

@@ -1,16 +1,47 @@
 import { PieChart, Landmark, ArrowUpRight, Anchor } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+
+const STORAGE_KEY = 'lcc_netWorth';
 
 export default function Assets() {
-    const fireTarget = 5000000; // R5 Million Target for FIRE
-    const [currentAssets, setCurrentAssets] = useState(
-        () => Number(localStorage.getItem('lcc_netWorth')) || 1100000
-    );
+    const fireTarget = 5000000;
+    const [currentAssets, setCurrentAssets] = useState(1100000); // default
+    const [loading, setLoading] = useState(true);
 
-    const handleNetWorthUpdate = (value) => {
+    const fetchNetWorth = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('user_data')
+            .select('value')
+            .eq('key', STORAGE_KEY)
+            .single();
+
+        if (data && data.value) {
+            setCurrentAssets(parseFloat(data.value));
+        } else if (!error) {
+            // Check local storage for legacy data (migration)
+            const savedLocal = localStorage.getItem(STORAGE_KEY);
+            if (savedLocal) {
+                const parsed = parseFloat(savedLocal);
+                setCurrentAssets(parsed);
+                // Promptly push to DB
+                await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { fetchNetWorth() }, [fetchNetWorth]);
+
+    const handleNetWorthUpdate = async (value) => {
         const parsed = parseFloat(value) || 0;
         setCurrentAssets(parsed);
-        localStorage.setItem('lcc_netWorth', parsed);
+        // Persist to DB
+        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
+        if (error) console.error('Error saving net worth:', error.message);
+        // Also keep local as backup
+        localStorage.setItem(STORAGE_KEY, parsed);
     };
 
     const progress = Math.min(100, Math.max(0, (currentAssets / fireTarget) * 100));

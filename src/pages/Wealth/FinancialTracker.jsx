@@ -1,38 +1,165 @@
-import { useState, useRef, useEffect } from 'react';
-import { Upload, Plus, Download, Split as SplitIcon, Trash2, FileSpreadsheet, X, AlertCircle } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+import { Upload, Plus, Download, Split as SplitIcon, Trash2, FileSpreadsheet, X, AlertCircle, Loader2, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Point pdfjs to its worker (bundled version)
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.mjs',
+    import.meta.url
+).toString();
 
 export default function FinancialTracker() {
-    const [transactions, setTransactions] = useState(() => {
-        try {
-            const saved = localStorage.getItem('lcc_transactions');
-            return saved ? JSON.parse(saved) : [];
-        } catch {
-            console.warn('lcc_transactions was corrupted — resetting.');
-            return [];
-        }
-    });
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [newEntry, setNewEntry] = useState({ date: '', account: '', description: '', category: '', amount: '' });
     const [splitModal, setSplitModal] = useState({ isOpen: false, transactionId: null, originalAmount: 0, splits: [] });
+    const [isParsing, setIsParsing] = useState(false);
+    const [parseError, setParseError] = useState(null);
     const fileInputRef = useRef(null);
 
-    // Persist transactions across page reloads
-    useEffect(() => {
-        localStorage.setItem('lcc_transactions', JSON.stringify(transactions));
-    }, [transactions]);
+    // Load all transactions from Supabase on mount
+    const fetchTransactions = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('transactions')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error('Error loading transactions:', error.message);
+        } else {
+            setTransactions(data || []);
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
 
     const categories = ['Groceries', 'Gifts', 'Petrol', 'To Be Paid Back', 'Treats', 'Income', 'Other'];
     const accounts = ['Credit Card', 'Debit Card', 'Checking', 'Savings', 'Cash', 'Other'];
 
-    const handleFileUpload = (e) => {
+    const parsePdfTransactions = async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            // Sort items by Y position (top-to-bottom), then X (left-to-right)
+            const items = content.items.sort((a, b) => {
+                const yDiff = Math.round(b.transform[5]) - Math.round(a.transform[5]);
+                if (Math.abs(yDiff) > 2) return yDiff;
+                return a.transform[4] - b.transform[4];
+            });
+            // Group items into lines based on Y position
+            const lines = [];
+            let currentLine = [];
+            let lastY = null;
+            for (const item of items) {
+                const y = Math.round(item.transform[5]);
+                if (lastY !== null && Math.abs(y - lastY) > 4) {
+                    if (currentLine.length) lines.push(currentLine.join(' ').trim());
+                    currentLine = [];
+                }
+                currentLine.push(item.str);
+                lastY = y;
+            }
+            if (currentLine.length) lines.push(currentLine.join(' ').trim());
+            fullText += lines.join('\n') + '\n';
+        }
+
+        return extractTransactionsFromText(fullText);
+    };
+
+    const extractTransactionsFromText = (text) => {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+        const transactions = [];
+
+        // Regex: matches lines that start with or contain a date (DD/MM/YYYY, DD Mon YYYY, YYYY-MM-DD)
+        // followed by a description and end with an amount
+        const datePatterns = [
+            // DD/MM/YYYY or DD-MM-YYYY at start of line
+            /^(\d{2}[/-]\d{2}[/-]\d{4})\s+(.+?)\s+(-?[\d\s]+[.,]\d{2})\s*$/,
+            // YYYY-MM-DD at start of line
+            /^(\d{4}-\d{2}-\d{2})\s+(.+?)\s+(-?[\d\s]+[.,]\d{2})\s*$/,
+            // DD Mon YYYY (e.g. 04 Mar 2026)
+            /^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4})\s+(.+?)\s+(-?[\d\s]+[.,]\d{2})\s*$/i,
+            // Date anywhere in line with amount at end
+            /^(\d{1,2}[/-]\d{2}[/-]\d{4})\s+(.*?)\s+(-?R?[\d\s]+[.,]\d{2})\s*$/,
+        ];
+
+        for (const line of lines) {
+            // Skip header-like lines
+            if (/^(date|transaction|description|amount|balance|debit|credit|details|reference)/i.test(line)) continue;
+            // Skip very short lines or lines with no digits
+            if (!/\d/.test(line)) continue;
+
+            for (const pattern of datePatterns) {
+                const match = line.match(pattern);
+                if (match) {
+                    const rawDate = match[1].trim();
+                    const description = match[2].trim().replace(/\s+/g, ' ');
+                    const rawAmount = match[3].replace(/[R\s]/g, '').replace(',', '.');
+                    const amount = parseFloat(rawAmount);
+
+                    if (!description || isNaN(amount)) break;
+
+                    // Normalise date to YYYY-MM-DD
+                    let date = rawDate;
+                    const dmyMatch = rawDate.match(/(\d{2})[/-](\d{2})[/-](\d{4})/);
+                    if (dmyMatch) date = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+                    const ymdMatch = rawDate.match(/(\d{4})-(\d{2})-(\d{2})/);
+                    if (ymdMatch) date = rawDate;
+                    const wordsMatch = rawDate.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/i);
+                    if (wordsMatch) {
+                        const months = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+                        const m = months[wordsMatch[2].toLowerCase()] || '01';
+                        date = `${wordsMatch[3]}-${m}-${wordsMatch[1].padStart(2, '0')}`;
+                    }
+
+                    transactions.push({
+                        id: crypto.randomUUID(),
+                        date,
+                        account: 'Other',
+                        description,
+                        category: 'Other',
+                        amount: Math.abs(amount),
+                    });
+                    break;
+                }
+            }
+        }
+
+        return transactions;
+    };
+
+    const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         const fileExt = file.name.split('.').pop().toLowerCase();
+        setParseError(null);
 
-        if (fileExt === 'csv') {
+        if (fileExt === 'pdf') {
+            setIsParsing(true);
+            try {
+                const parsed = await parsePdfTransactions(file);
+                if (parsed.length === 0) {
+                    setParseError('No transactions found in this PDF. The format may not be supported — try uploading a CSV or Excel export from your bank instead.');
+                } else {
+                    setTransactions(prev => [...prev, ...parsed]);
+                }
+            } catch (err) {
+                console.error('PDF parse error:', err);
+                setParseError('Failed to read the PDF. Make sure it is a text-based PDF (not a scanned image) and try again.');
+            } finally {
+                setIsParsing(false);
+            }
+        } else if (fileExt === 'csv') {
             Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
@@ -42,13 +169,13 @@ export default function FinancialTracker() {
             });
         } else if (fileExt === 'xlsx' || fileExt === 'xls') {
             const reader = new FileReader();
-            reader.onload = (evt) => {
+            reader.onload = async (evt) => {
                 const data = evt.target.result;
                 const workbook = XLSX.read(data, { type: 'binary' });
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-                processData(jsonData);
+                await processData(jsonData);
             };
             reader.readAsBinaryString(file);
         }
@@ -57,7 +184,7 @@ export default function FinancialTracker() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const processData = (data) => {
+    const processData = async (data) => {
         const mapped = data.map(row => {
             const getVal = (possibleNames) => {
                 const key = Object.keys(row).find(k => possibleNames.includes(k.toLowerCase().trim()));
@@ -76,33 +203,59 @@ export default function FinancialTracker() {
             };
         }).filter(t => t.description !== 'Unknown Transaction' || t.amount !== 0);
 
-        setTransactions(prev => [...prev, ...mapped]);
+        // Insert all mapped rows into Supabase
+        const toInsert = mapped.map(({ id, ...rest }) => rest); // let DB generate UUIDs
+        const { data: insertedData, error } = await supabase.from('transactions').insert(toInsert).select();
+        if (error) {
+            console.error('Error saving imported transactions:', error.message);
+            alert('Some transactions could not be saved. Please try again.');
+        } else {
+            setTransactions(prev => [...(insertedData || []), ...prev]);
+        }
     };
 
-    const handleManualAdd = (e) => {
+    const handleManualAdd = async (e) => {
         e.preventDefault();
         if (!newEntry.amount || !newEntry.description) return;
 
-        setTransactions([{
-            id: Date.now().toString(),
+        const row = {
             date: newEntry.date || new Date().toISOString().split('T')[0],
             account: newEntry.account || 'Other',
             description: newEntry.description,
             category: newEntry.category || 'Other',
             amount: parseFloat(newEntry.amount)
-        }, ...transactions]);
+        };
 
+        const { data, error } = await supabase.from('transactions').insert(row).select().single();
+        if (error) {
+            console.error('Error adding transaction:', error.message);
+            alert('Could not save transaction. Please try again.');
+            return;
+        }
+        setTransactions(prev => [data, ...prev]);
         setNewEntry({ date: '', account: '', description: '', category: '', amount: '' });
     };
 
-    const deleteTransaction = (id) => {
-        if (confirm("Are you sure you want to delete this transaction?")) {
-            setTransactions(transactions.filter(t => t.id !== id));
+    const deleteTransaction = async (id) => {
+        if (!confirm('Are you sure you want to delete this transaction?')) return;
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) {
+            console.error('Error deleting transaction:', error.message);
+            alert('Could not delete transaction. Please try again.');
+            return;
         }
+        setTransactions(prev => prev.filter(t => t.id !== id));
     };
 
-    const updateTransaction = (id, field, value) => {
-        setTransactions(transactions.map(t => t.id === id ? { ...t, [field]: value } : t));
+    const updateTransaction = async (id, field, value) => {
+        // Optimistically update UI first
+        setTransactions(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+        const { error } = await supabase.from('transactions').update({ [field]: value }).eq('id', id);
+        if (error) {
+            console.error('Error updating transaction:', error.message);
+            // Revert on failure
+            fetchTransactions();
+        }
     };
 
     const openSplitModal = (t) => {
@@ -143,7 +296,7 @@ export default function FinancialTracker() {
         }));
     };
 
-    const handleSaveSplit = () => {
+    const handleSaveSplit = async () => {
         const totalSplit = splitModal.splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
 
         // Rounding logic for floating point comparison
@@ -161,22 +314,36 @@ export default function FinancialTracker() {
             return;
         }
 
-        const newTransactions = splitModal.splits
+        const splitRows = splitModal.splits
             .filter(s => parseFloat(s.amount || 0) !== 0)
             .map(s => ({
-                ...tOriginal,
-                id: crypto.randomUUID(),
+                date: tOriginal.date,
+                account: tOriginal.account,
                 amount: parseFloat(s.amount),
                 category: s.category,
                 description: s.description || tOriginal.description + ' (Split)'
             }));
 
+        // Delete the original row, then insert the splits
+        const { error: delError } = await supabase.from('transactions').delete().eq('id', splitModal.transactionId);
+        if (delError) {
+            console.error('Error removing original transaction during split:', delError.message);
+            alert('Split failed. Please try again.');
+            return;
+        }
+        const { data: inserted, error: insError } = await supabase.from('transactions').insert(splitRows).select();
+        if (insError) {
+            console.error('Error inserting split rows:', insError.message);
+            alert('Split rows could not be saved. Please try again.');
+            // Re-fetch to restore consistent state
+            fetchTransactions();
+            closeSplitModal();
+            return;
+        }
+
         setTransactions(prev => {
-            const index = prev.findIndex(t => t.id === splitModal.transactionId);
-            if (index === -1) return prev;
-            const newArr = [...prev];
-            newArr.splice(index, 1, ...newTransactions);
-            return newArr;
+            const filtered = prev.filter(t => t.id !== splitModal.transactionId);
+            return [...(inserted || []), ...filtered];
         });
 
         closeSplitModal();
@@ -213,16 +380,37 @@ export default function FinancialTracker() {
                     <h1>Financial Tracker</h1>
                     <p>Upload statements, categorize, and split transactions effortlessly.</p>
                 </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button onClick={() => fileInputRef.current?.click()} className="btn" style={{ background: 'var(--color-wealth-bg)', color: 'var(--color-wealth)' }}>
-                        <Upload size={18} /> Upload Bank File
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isParsing}
+                        className="btn"
+                        style={{ background: 'var(--color-wealth-bg)', color: 'var(--color-wealth)', opacity: isParsing ? 0.7 : 1 }}
+                    >
+                        {isParsing ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Upload size={18} />}
+                        {isParsing ? 'Reading PDF...' : 'Upload Bank File'}
                     </button>
-                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv, .xlsx, .xls" style={{ display: 'none' }} />
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv, .xlsx, .xls, .pdf" style={{ display: 'none' }} />
                     <button onClick={handleExport} className="btn" style={{ background: 'var(--color-wealth)', color: 'white' }}>
                         <Download size={18} /> Export Data
                     </button>
                 </div>
             </header>
+
+            {/* PDF Tip Banner */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.85rem 1.1rem', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '10px', marginBottom: '1.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                <FileText size={16} style={{ flexShrink: 0, marginTop: '1px', color: 'var(--color-wealth)' }} />
+                <span>Supported formats: <strong style={{ color: 'white' }}>PDF</strong> (text-based bank statements), <strong style={{ color: 'white' }}>CSV</strong>, and <strong style={{ color: 'white' }}>Excel</strong>. PDFs must be digital text — scanned/image PDFs won't work.</span>
+            </div>
+
+            {/* Parse Error Banner */}
+            {parseError && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.85rem 1.1rem', background: 'var(--color-love-bg)', border: '1px solid rgba(255,80,80,0.25)', borderRadius: '10px', marginBottom: '1.5rem', fontSize: '0.88rem', color: 'var(--color-love)' }}>
+                    <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span>{parseError}</span>
+                    <button onClick={() => setParseError(null)} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--color-love)', cursor: 'pointer', padding: 0 }}><X size={16} /></button>
+                </div>
+            )}
 
             {/* Manual Entry Form */}
             <div className="card mb-8">

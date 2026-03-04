@@ -1,5 +1,8 @@
 import { Target, Lock, Unlock, CheckCircle2, ListPlus, CalendarDays, Rocket } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+
+const STORAGE_KEY = 'lcc_ascent';
 
 // Default State for a new user
 const DEFAULT_ASCENT_DATA = {
@@ -12,7 +15,7 @@ const DEFAULT_ASCENT_DATA = {
             id: 1,
             title: "Sort out skin routine",
             description: "Establish morning/night protocol & book derm appt.",
-            status: "active" // 'completed', 'active', 'locked'
+            status: "active"
         },
         {
             id: 2,
@@ -27,21 +30,45 @@ const DEFAULT_ASCENT_DATA = {
             status: "locked"
         }
     ],
-    queue: [] // Future goals not yet assigned a level
+    queue: []
 };
 
 export default function AscentDashboard() {
-    const [data, setData] = useState(() => {
-        return JSON.parse(localStorage.getItem('lcc_ascent')) || DEFAULT_ASCENT_DATA;
-    });
+    const [data, setData] = useState(DEFAULT_ASCENT_DATA);
+    const [loading, setLoading] = useState(true);
 
-    // Goal Form State
-    const [showAdmin, setShowAdmin] = useState(false);
-    const [newGoal, setNewGoal] = useState({ title: '', description: '' });
+    const fetchAscentData = useCallback(async () => {
+        setLoading(true);
+        const { data: dbData, error } = await supabase
+            .from('user_data')
+            .select('value')
+            .eq('key', STORAGE_KEY)
+            .single();
 
-    useEffect(() => {
-        localStorage.setItem('lcc_ascent', JSON.stringify(data));
-    }, [data]);
+        if (dbData && dbData.value) {
+            setData(dbData.value);
+        } else {
+            // Check local storage for legacy data (migration)
+            const savedLocal = localStorage.getItem(STORAGE_KEY);
+            if (savedLocal) {
+                try {
+                    const parsed = JSON.parse(savedLocal);
+                    setData(parsed);
+                    await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
+                } catch (e) { console.error('Migration failed', e); }
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { fetchAscentData(); }, [fetchAscentData]);
+
+    const persistAscentData = async (newData) => {
+        setData(newData);
+        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: newData });
+        if (error) console.error('Error saving ascent data:', error.message);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    };
 
     // Logic to calculate days remaining
     const calculateDaysLeft = () => {
@@ -81,7 +108,7 @@ export default function AscentDashboard() {
             }
         }
 
-        setData({ ...data, levels: newLevels });
+        persistAscentData({ ...data, levels: newLevels });
     };
 
     // Admin: Add to Queue
@@ -89,7 +116,7 @@ export default function AscentDashboard() {
         e.preventDefault();
         if (!newGoal.title) return;
 
-        setData({
+        persistAscentData({
             ...data,
             queue: [...data.queue, { id: Date.now(), ...newGoal }]
         });
@@ -107,7 +134,7 @@ export default function AscentDashboard() {
             status: data.levels.every(l => l.status === 'completed') ? 'active' : 'locked'
         };
 
-        setData({
+        persistAscentData({
             ...data,
             queue: newQueue,
             levels: [...data.levels, newLevelItem]
