@@ -233,35 +233,47 @@ export default function Fitness() {
 
     const fetchFitnessData = useCallback(async () => {
         setLoading(true);
-        const { data: dbData, error } = await supabase
-            .from('user_data')
-            .select('value')
-            .eq('key', STORAGE_KEY)
-            .single();
+        try {
+            const { data: dbData, error } = await supabase
+                .from('user_data')
+                .select('value')
+                .eq('key', STORAGE_KEY)
+                .maybeSingle(); // maybeSingle doesn't throw error if not found
 
-        if (dbData && dbData.value) {
-            setData(dbData.value);
-        } else {
-            // Check local storage for legacy data (migration)
-            const savedLocal = localStorage.getItem(STORAGE_KEY);
-            if (savedLocal) {
-                try {
-                    const parsed = JSON.parse(savedLocal);
-                    setData(parsed);
-                    await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
-                } catch (e) { console.error('Migration failed', e); }
+            if (dbData && dbData.value) {
+                setData(dbData.value);
+            } else {
+                // Check local storage for legacy data (migration)
+                const savedLocal = localStorage.getItem(STORAGE_KEY);
+                if (savedLocal) {
+                    try {
+                        const parsed = JSON.parse(savedLocal);
+                        setData(parsed);
+                        // Silently try to sync to DB
+                        await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
+                    } catch (e) { console.error('Migration failure:', e); }
+                }
             }
+        } catch (err) {
+            console.error('Error fetching fitness data:', err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => { fetchFitnessData(); }, [fetchFitnessData]);
 
     const persistFitnessData = async (newData) => {
+        // 1. Update React state immediately
         setData(newData);
-        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: newData });
-        if (error) console.error('Error saving fitness data:', error.message);
+
+        // 2. Update Local Storage immediately (Sync)
+        // This ensures the data stays even if the page is refreshed BEFORE the DB call finishes
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+
+        // 3. Update Supabase (Async)
+        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: newData });
+        if (error) console.error('Error saving to Supabase:', error.message);
     };
 
     const navigate = (dir) => {
@@ -278,9 +290,13 @@ export default function Fitness() {
     }, []);
 
     const handleSave = useCallback((dateStr, payload) => {
-        const newData = { ...data, [dateStr]: payload };
-        persistFitnessData(newData);
-    }, [data]);
+        // Use functional update to avoid closure staleness issues
+        setData(prevData => {
+            const newData = { ...prevData, [dateStr]: payload };
+            persistFitnessData(newData);
+            return newData;
+        });
+    }, []);
 
     const cells = buildCalendarGrid(year, month);
     const today = todayStr();
