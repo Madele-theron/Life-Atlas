@@ -171,6 +171,10 @@ export default function Course() {
     }
 
     // Individual Course View
+    const activeCourse = courses.find(c => c.id === selectedCourseId);
+
+    if (!activeCourse) return null;
+
     const totalTasks = activeCourse.weeks.reduce((acc, week) => acc + week.tasks.length, 0);
     const completedTasks = activeCourse.weeks.reduce((acc, week) => acc + week.tasks.filter(t => t.completed).length, 0);
     const progressPercent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);

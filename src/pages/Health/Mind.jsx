@@ -1,6 +1,39 @@
-import { Sun, Wind, Battery, Headphones } from 'lucide-react';
+import { Sun, Wind, Battery, Headphones, CheckCircle2 } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+
+const STORAGE_KEY = 'lcc_mind_log';
 
 export default function Mind() {
+    const [entry, setEntry] = useState('');
+    const [status, setStatus] = useState('');
+    const [history, setHistory] = useState([]);
+
+    const fetchLog = useCallback(async () => {
+        const { data } = await supabase.from('user_data').select('value').eq('key', STORAGE_KEY).single();
+        if (data && data.value) setHistory(data.value);
+    }, []);
+
+    useEffect(() => { fetchLog(); }, [fetchLog]);
+
+    const handleSave = async () => {
+        if (!entry.trim()) return;
+        setStatus('Saving...');
+        const newLog = { id: Date.now(), text: entry, date: new Date().toLocaleDateString() };
+        const newHistory = [newLog, ...history];
+
+        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: newHistory });
+        if (error) {
+            setStatus('Error saving');
+            console.error('Error saving:', error.message);
+        } else {
+            setStatus('Saved!');
+            setEntry('');
+            setHistory(newHistory);
+            setTimeout(() => setStatus(''), 2000);
+        }
+    };
+
     return (
         <div className="fade-in">
             <header className="mb-8">
@@ -58,10 +91,29 @@ export default function Mind() {
 
                     <textarea
                         placeholder="How are you feeling today? Any specific stressors? What went well?"
-                        rows={6}
+                        rows={4}
+                        value={entry}
+                        onChange={(e) => setEntry(e.target.value)}
                         style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-dark)', color: 'white', resize: 'vertical', marginBottom: '1rem' }}
                     ></textarea>
-                    <button className="btn" style={{ background: 'var(--color-self)', width: '100%', justifyContent: 'center' }}>Save Entry</button>
+
+                    <button onClick={handleSave} className="btn" style={{ background: 'var(--color-self)', width: '100%', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                        {status === 'Saving...' ? 'Saving...' : status === 'Saved!' ? <><CheckCircle2 size={18} /> Saved</> : 'Save Entry'}
+                    </button>
+
+                    {history.length > 0 && (
+                        <div>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.5rem' }}>Recent Entries</h3>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {history.slice(0, 5).map(log => (
+                                    <li key={log.id} style={{ fontSize: '0.9rem', padding: '0.75rem', background: 'var(--bg-card)', borderRadius: '8px', borderLeft: '2px solid var(--color-self)' }}>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{log.date}</div>
+                                        <div>{log.text}</div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

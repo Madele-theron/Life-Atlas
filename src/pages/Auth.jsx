@@ -1,29 +1,39 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Compass, Sparkles, Activity, ShieldCheck, Heart, Crosshair, Lock } from 'lucide-react';
+import { Compass, Sparkles, Activity, ShieldCheck, Heart, Crosshair, Lock, Mail } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Auth() {
     const [loading, setLoading] = useState(false);
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [message, setMessage] = useState('');
     const navigate = useNavigate();
 
     const handleAuth = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setMessage('');
 
-        const masterPassword = import.meta.env.VITE_APP_PASSWORD;
-
-        setTimeout(() => {
-            if (password === masterPassword) {
-                localStorage.setItem('atlas_session', 'ATLAS_AUTHENTICATED');
-                navigate('/');
+        if (isSignUp) {
+            const { error } = await supabase.auth.signUp({ email, password });
+            if (error) {
+                setError(error.message);
             } else {
-                setError('Incorrect Access Key');
+                setMessage('Check your email for the confirmation link!');
             }
-            setLoading(false);
-        }, 800);
+        } else {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+                setError(error.message);
+            } else {
+                navigate('/');
+            }
+        }
+        setLoading(false);
     };
 
     return (
@@ -85,23 +95,43 @@ export default function Auth() {
                     <div className="mb-10 lg:text-left text-center">
                         <h2 className="text-3xl font-bold tracking-tight text-white mb-3 flex items-center gap-3 lg:justify-start justify-center">
                             <Lock className="w-8 h-8 text-indigo-400" />
-                            Secure Access
+                            {isSignUp ? 'Create Account' : 'Secure Access'}
                         </h2>
                         <p className="text-zinc-400 text-sm">
-                            Please enter your master access key to continue to your dashboard.
+                            {isSignUp ? 'Sign up to securely synchronize your existence.' : 'Sign in to access your dashboard.'}
                         </p>
                     </div>
 
                     <form onSubmit={handleAuth} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-zinc-300 mb-4 pl-1">Master Access Key</label>
+                            <label className="block text-sm font-medium text-zinc-300 mb-2 pl-1">Email</label>
                             <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Mail className="h-5 w-5 text-zinc-500" />
+                                </div>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    autoFocus
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full pl-12 pr-5 py-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl text-white placeholder-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all font-mono tracking-wide text-lg"
+                                    placeholder="commander@atlas.net"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-zinc-300 mb-2 pl-1">Password</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Lock className="h-5 w-5 text-zinc-500" />
+                                </div>
                                 <input
                                     type="password"
                                     value={password}
-                                    autoFocus
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-5 py-5 bg-zinc-900/50 border border-zinc-800 rounded-2xl text-white placeholder-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all font-mono tracking-widest text-lg"
+                                    className="w-full pl-12 pr-5 py-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl text-white placeholder-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all font-mono tracking-widest text-lg"
                                     placeholder="••••••••••••"
                                     required
                                 />
@@ -115,15 +145,31 @@ export default function Auth() {
                             </div>
                         )}
 
+                        {message && (
+                            <div className="p-4 text-sm bg-emerald-950/30 border border-emerald-500/30 text-emerald-400 rounded-2xl flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                {message}
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={loading}
                             className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 border border-white/10 hover:border-white/30 hover:bg-white/5 text-white font-semibold rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden mt-4"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                            <span className="relative z-10">{loading ? 'Verifying Key...' : 'Unlock Atlas'}</span>
+                            <span className="relative z-10">{loading ? 'Verifying...' : isSignUp ? 'Sign Up' : 'Unlock Atlas'}</span>
                         </button>
                     </form>
+
+                    <div className="mt-6 text-center">
+                        <button
+                            onClick={() => { setIsSignUp(!isSignUp); setError(''); setMessage(''); }}
+                            className="text-zinc-400 text-sm hover:text-white transition-colors"
+                        >
+                            {isSignUp ? 'Already have access? Sign In' : 'First time? Create your access key'}
+                        </button>
+                    </div>
 
                     <div className="mt-12 p-6 rounded-2xl bg-zinc-900/30 border border-zinc-800/50">
                         <div className="flex items-start gap-4 text-xs text-zinc-500 leading-relaxed">

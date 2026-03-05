@@ -1,14 +1,44 @@
 import { TrendingUp, Target, Zap } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+
+const STORAGE_KEY = 'lcc_wealth_dashboard';
 
 export default function WealthDashboard() {
-    const [netWorth, setNetWorth] = useState(
-        () => localStorage.getItem('lcc_netWorth') || '0.00'
-    );
+    const [netWorth, setNetWorth] = useState('0.00');
+    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
+    const fetchWealthData = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('user_data')
+            .select('value')
+            .eq('key', STORAGE_KEY)
+            .single();
+
+        if (data && data.value && data.value.netWorth) {
+            setNetWorth(data.value.netWorth);
+        } else {
+            // Check local storage for legacy data (migration)
+            const savedLocal = localStorage.getItem('lcc_netWorth');
+            if (savedLocal) {
+                setNetWorth(savedLocal);
+                await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: { netWorth: savedLocal } });
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { fetchWealthData(); }, [fetchWealthData]);
+
+    const handleNetWorthChange = (val) => {
+        setNetWorth(val);
+    };
+
+    const handleNetWorthBlur = async () => {
         localStorage.setItem('lcc_netWorth', netWorth);
-    }, [netWorth]);
+        await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: { netWorth } });
+    };
 
     return (
         <div className="fade-in">
@@ -33,7 +63,8 @@ export default function WealthDashboard() {
                     <input
                         type="number"
                         value={netWorth}
-                        onChange={(e) => setNetWorth(e.target.value)}
+                        onChange={(e) => handleNetWorthChange(e.target.value)}
+                        onBlur={handleNetWorthBlur}
                         style={{
                             background: 'transparent',
                             border: 'none',

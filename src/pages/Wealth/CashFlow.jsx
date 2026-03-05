@@ -1,28 +1,58 @@
 import { ReceiptCent, AlertCircle, ExternalLink, Plus } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
+
+const STORAGE_KEY = 'lcc_leaks';
 
 export default function CashFlow() {
-    const [leaks, setLeaks] = useState(() => {
-        return JSON.parse(localStorage.getItem('lcc_leaks')) || [
-            { id: 1, item: 'Takeout Coffee', amount: 120, date: '2026-02-25' }
-        ];
-    });
+    const [leaks, setLeaks] = useState([]);
     const [newLeak, setNewLeak] = useState({ item: '', amount: '' });
+    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        localStorage.setItem('lcc_leaks', JSON.stringify(leaks));
-    }, [leaks]);
+    const fetchLeaks = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('user_data')
+            .select('value')
+            .eq('key', STORAGE_KEY)
+            .single();
+
+        if (data && data.value) {
+            setLeaks(data.value);
+        } else {
+            const savedLocal = localStorage.getItem(STORAGE_KEY);
+            if (savedLocal) {
+                const parsed = JSON.parse(savedLocal);
+                setLeaks(parsed);
+                await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: parsed });
+            } else {
+                setLeaks([{ id: 1, item: 'Takeout Coffee', amount: 120, date: '2026-02-25' }]);
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { fetchLeaks(); }, [fetchLeaks]);
+
+    const persistLeaks = async (newData) => {
+        setLeaks(newData);
+        const { error } = await supabase.from('user_data').upsert({ key: STORAGE_KEY, value: newData });
+        if (error) console.error('Error saving leaks:', error.message);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    };
 
     const addLeak = (e) => {
         e.preventDefault();
         if (!newLeak.item || !newLeak.amount) return;
-        setLeaks([...leaks, { id: Date.now(), item: newLeak.item, amount: Number(newLeak.amount), date: new Date().toISOString().split('T')[0] }]);
+        const newArray = [...leaks, { id: Date.now(), item: newLeak.item, amount: Number(newLeak.amount), date: new Date().toISOString().split('T')[0] }];
+        persistLeaks(newArray);
         setNewLeak({ item: '', amount: '' });
     };
 
     const deleteLeak = (id) => {
-        setLeaks(leaks.filter(l => l.id !== id));
-    }
+        const newArray = leaks.filter(l => l.id !== id);
+        persistLeaks(newArray);
+    };
 
     return (
         <div className="fade-in">

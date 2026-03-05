@@ -1,13 +1,15 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, HeartPulse, Wallet, Heart, Sparkles, PieChart, Target, BookOpen, ReceiptCent, Dumbbell, ShieldCheck, Sun, GraduationCap, Mountain, FileSpreadsheet, LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
 
-  const handleSignOut = () => {
-    localStorage.removeItem('atlas_session');
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('atlas_session'); // Keep for legacy
     navigate('/auth');
   };
 

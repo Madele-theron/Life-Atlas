@@ -36,6 +36,8 @@ const DEFAULT_ASCENT_DATA = {
 export default function AscentDashboard() {
     const [data, setData] = useState(DEFAULT_ASCENT_DATA);
     const [loading, setLoading] = useState(true);
+    const [showAdmin, setShowAdmin] = useState(false);
+    const [newGoal, setNewGoal] = useState({ title: '', description: '' });
 
     const fetchAscentData = useCallback(async () => {
         setLoading(true);

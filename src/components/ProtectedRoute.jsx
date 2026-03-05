@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 export default function ProtectedRoute({ children }) {
     const [isAuthenticated, setIsAuthenticated] = useState(null);
 
     useEffect(() => {
-        const session = localStorage.getItem('atlas_session');
-        // Compare against a fixed opaque token — never the raw password
-        if (session === 'ATLAS_AUTHENTICATED') {
-            setIsAuthenticated(true);
-        } else {
-            setIsAuthenticated(false);
-        }
+        // Initial session check
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setIsAuthenticated(!!session);
+        });
+
+        // Listen for auth state changes (login/logout/token expiry)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setIsAuthenticated(!!session);
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     if (isAuthenticated === null) {
@@ -28,4 +33,3 @@ export default function ProtectedRoute({ children }) {
 
     return children;
 }
-
